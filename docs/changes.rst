@@ -4,10 +4,18 @@ Changelog
 `Unreleased`_ - TBA
 -------------------
 
+**Changed**
+
+- Update py-moneyed to 2.0.
+
 **Fixed**
 
 - Improve the internal check for whether a currency is provided `#657`_ (`davidszotten`_)
 - Fix test suite for django main branch `#657`_ (`davidszotten`_)
+
+**Removed**
+- Remove the deprecated ``Money.decimal_places_display`` property and argument.
+- Remove the deprecated ``CURRENCY_DECIMAL_PLACES_DISPLAY`` setting.
 
 `2.1.1`_ - 2022-01-02
 ---------------------
