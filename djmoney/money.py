@@ -86,12 +86,6 @@ class Money(DefaultMoney):
         # https://github.com/py-moneyed/py-moneyed/blob/c518745dd9d7902781409daec1a05699799474dd/moneyed/classes.py#L217-L218
         raise TypeError("Cannot divide non-Money by a Money instance.")
 
-    @property
-    def is_localized(self):
-        if self.use_l10n is None:
-            return settings.USE_L10N
-        return self.use_l10n
-
     def __str__(self):
         format_options = {
             **MONEY_FORMAT,
