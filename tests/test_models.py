@@ -39,6 +39,8 @@ from .testapp.models import (
     ModelWithDefaultAsOldMoney,
     ModelWithDefaultAsString,
     ModelWithDefaultAsStringWithCurrency,
+    ModelWithDefaultCurrencyOnly,
+    ModelWithDefaultValueAndCurrency,
     ModelWithNonMoneyField,
     ModelWithNullableCurrency,
     ModelWithSharedCurrency,
@@ -60,8 +62,8 @@ class TestVanillaMoneyField:
     @pytest.mark.parametrize(
         "model_class, kwargs, expected",
         (
-            (ModelWithVanillaMoneyField, {"money": Money("100.0")}, Money("100.0")),
-            (ModelWithVanillaMoneyField, {"money": OldMoney("100.0")}, Money("100.0")),
+            (ModelWithVanillaMoneyField, {"money": Money("100.0", "USD")}, Money("100.0", "USD")),
+            (ModelWithVanillaMoneyField, {"money": OldMoney("100.0", "USD")}, Money("100.0", "USD")),
             (BaseModel, {}, Money(0, "USD")),
             (BaseModel, {"money": "111.2"}, Money("111.2", "USD")),
             (BaseModel, {"money": Money("123", "PLN")}, Money("123", "PLN")),
@@ -116,7 +118,7 @@ class TestVanillaMoneyField:
     @pytest.mark.parametrize(
         "model_class, other_value",
         (
-            (ModelWithVanillaMoneyField, Money("100.0")),
+            (ModelWithDefaultValueAndCurrency, Money("100.0", "USD")),
             (BaseModel, Money(0, "USD")),
             (ModelWithDefaultAsMoney, Money("0.01", "RUB")),
             (ModelWithDefaultAsFloat, OldMoney("12.05", "PLN")),
@@ -151,7 +153,11 @@ class TestVanillaMoneyField:
     @pytest.mark.parametrize("money_class", (Money, OldMoney))
     @pytest.mark.parametrize("field_name", ("money", "second_money"))
     def test_save_new_value(self, field_name, money_class):
-        ModelWithVanillaMoneyField.objects.create(**{field_name: money_class("100.0")})
+        kwargs = {
+            "money": money_class("100.0", "USD"),
+        }
+        kwargs[field_name] = money_class("100.0", "USD")
+        ModelWithVanillaMoneyField.objects.create(**kwargs)
 
         # Try setting the value directly
         retrieved = ModelWithVanillaMoneyField.objects.get()
@@ -162,14 +168,14 @@ class TestVanillaMoneyField:
         assert getattr(retrieved, field_name) == Money(1, "DKK")
 
     def test_rounding(self):
-        money = Money("100.0623456781123219")
+        money = Money("100.0623456781123219", "EUR")
 
         instance = ModelWithVanillaMoneyField.objects.create(money=money)
         # TODO. Should instance.money be rounded too?
 
         retrieved = ModelWithVanillaMoneyField.objects.get(pk=instance.pk)
 
-        assert retrieved.money == Money("100.06")
+        assert retrieved.money == Money("100.06", "EUR")
 
     @pytest.fixture(params=[Money, OldMoney])
     def objects_setup(self, request):
@@ -238,7 +244,7 @@ class TestVanillaMoneyField:
         assert ModelWithTwoMoneyFields.objects.filter(**kwargs).count() == expected
 
     def test_exact_match(self):
-        money = Money("100.0")
+        money = Money("100.0", "EUR")
 
         instance = ModelWithVanillaMoneyField.objects.create(money=money)
         retrieved = ModelWithVanillaMoneyField.objects.get(money=money)
@@ -251,9 +257,9 @@ class TestVanillaMoneyField:
         ModelIssue300.objects.filter(money__created__gt=date)
 
     def test_range_search(self):
-        money = Money("3")
+        money = Money("3", "EUR")
 
-        instance = ModelWithVanillaMoneyField.objects.create(money=Money("100.0"))
+        instance = ModelWithVanillaMoneyField.objects.create(money=Money("100.0", "EUR"))
         retrieved = ModelWithVanillaMoneyField.objects.get(money__gt=money)
 
         assert instance.pk == retrieved.pk
@@ -307,9 +313,9 @@ class TestGetOrCreate:
     @pytest.mark.parametrize(
         "model, field_name, kwargs, currency",
         (
-            (ModelWithVanillaMoneyField, "money", {"money_currency": "PLN"}, "PLN"),
-            (ModelWithVanillaMoneyField, "money", {"money": Money(0, "EUR")}, "EUR"),
-            (ModelWithVanillaMoneyField, "money", {"money": OldMoney(0, "EUR")}, "EUR"),
+            (ModelWithDefaultValueAndCurrency, "money", {"money_currency": "PLN"}, "PLN"),
+            (ModelWithDefaultValueAndCurrency, "money", {"money": Money(0, "EUR")}, "EUR"),
+            (ModelWithDefaultValueAndCurrency, "money", {"money": OldMoney(0, "EUR")}, "EUR"),
             (ModelWithSharedCurrency, "first", {"first": 10, "second": 15, "currency": "CZK"}, "CZK"),
         ),
     )
@@ -382,8 +388,8 @@ class TestNullableCurrency:
 
     def test_fails_with_nullable_but_no_default(self):
         with pytest.raises(IntegrityError) as exc:
-            ModelWithTwoMoneyFields.objects.create()
-        assert str(exc.value) == "NOT NULL constraint failed: testapp_modelwithtwomoneyfields.amount1"
+            ModelWithDefaultCurrencyOnly.objects.create()
+        assert str(exc.value) == "NOT NULL constraint failed: testapp_modelwithdefaultcurrencyonly.money"
 
     def test_query_not_null(self):
         money = Money(100, "EUR")
@@ -527,7 +533,7 @@ class TestExpressions:
         assert ModelWithVanillaMoneyField.objects.get(integer=1).money == Money(0, "USD")
 
     def test_create_func(self):
-        instance = ModelWithVanillaMoneyField.objects.create(money=Func(Value(-10), function="ABS"))
+        instance = ModelWithDefaultValueAndCurrency.objects.create(money=Func(Value(-10), function="ABS"))
         instance.refresh_from_db()
         assert instance.money.amount == 10
 
@@ -560,7 +566,7 @@ def test_find_models_related_to_money_models():
 def test_allow_expression_nodes_without_money():
     """Allow querying on expression nodes that are not Money"""
     desc = "hundred"
-    ModelWithNonMoneyField.objects.create(money=Money(100.0), desc=desc)
+    ModelWithNonMoneyField.objects.create(money=Money(100.0, "USD"), desc=desc)
     instance = ModelWithNonMoneyField.objects.filter(desc=F("desc")).get()
     assert instance.desc == desc
 
@@ -787,17 +793,6 @@ def test_distinct_through_wrapper():
     assert queryset.count() == 3
 
 
-def test_mixer_blend():
-    try:
-        from mixer.backend.django import mixer
-    except AttributeError:
-        pass  # mixer doesn't work with pypy
-    else:
-        instance = mixer.blend(ModelWithTwoMoneyFields)
-        assert isinstance(instance.amount1, Money)
-        assert isinstance(instance.amount2, Money)
-
-
 @pytest.mark.parametrize(
     ("attribute", "build_kwargs", "expected"),
     [
@@ -827,3 +822,13 @@ def test_deconstruct_includes(attribute, build_kwargs, expected):
     new = MoneyField(*args, **kwargs)
     assert getattr(new, attribute) == getattr(instance, attribute)
     assert getattr(new, attribute) == expected
+
+
+def test_mixer_blend():
+    try:
+        from mixer.backend.django import mixer
+    except AttributeError:
+        pass  # mixer doesn't work with pypy
+    else:
+        instance = mixer.blend(ModelWithDefaultCurrencyOnly)
+        assert isinstance(instance.money, Money)

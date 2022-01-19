@@ -104,14 +104,6 @@ class MoneyFieldProxy:
         return data[self.field.name]
 
     def __set__(self, obj, value):  # noqa
-        if (
-            value is not None
-            and self.field._currency_field.null
-            and not isinstance(value, MONEY_CLASSES)
-            and not obj.__dict__[self.currency_field_name]
-        ):
-            # For nullable fields we need either both NULL amount and currency or both NOT NULL
-            raise ValueError("Missing currency value")
         if isinstance(value, BaseExpression):
             if isinstance(value, Value):
                 value = self.prepare_value(obj, value.value)
@@ -120,6 +112,14 @@ class MoneyFieldProxy:
                 prepare_expression(value)
         else:
             value = self.prepare_value(obj, value)
+        if (
+            value is not None
+            and self.field._currency_field.null
+            and not isinstance(value, MONEY_CLASSES)
+            and not obj.__dict__[self.currency_field_name]
+        ):
+            # For nullable fields we need either both NULL amount and currency or both NOT NULL
+            raise ValueError("Missing currency value")
         obj.__dict__[self.field.name] = value
 
     def prepare_value(self, obj, value):
@@ -178,7 +178,7 @@ class MoneyField(models.DecimalField):
         currency_max_length=CURRENCY_CODE_MAX_LENGTH,
         currency_field_name=None,
         money_descriptor_class=MoneyFieldProxy,
-        **kwargs
+        **kwargs,
     ):
         nullable = kwargs.get("null", False)
         default = self.setup_default(default, default_currency, nullable)
@@ -261,7 +261,7 @@ class MoneyField(models.DecimalField):
             default=self.default_currency,
             editable=False,
             choices=self.currency_choices,
-            null=self.default_currency is None,
+            null=self.null,
         )
         currency_field.creation_counter = self.creation_counter - 1
         currency_field_name = get_currency_field_name(name, self)

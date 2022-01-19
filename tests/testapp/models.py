@@ -25,9 +25,17 @@ else:
 
 class ModelWithVanillaMoneyField(models.Model):
     # TODO: This should now be an error?
-    money = MoneyField(max_digits=10, decimal_places=2, default=0.0)
+    money = MoneyField(max_digits=10, decimal_places=2)
     second_money = MoneyField(max_digits=10, decimal_places=2, default=0.0, default_currency="EUR")
     integer = models.IntegerField(default=0)
+
+
+class ModelWithDefaultValueAndCurrency(models.Model):
+    money = MoneyField(max_digits=10, decimal_places=2, default=0, default_currency="SEK")
+
+
+class ModelWithDefaultCurrencyOnly(models.Model):
+    money = MoneyField(max_digits=10, decimal_places=2, default_currency="SEK")
 
 
 class ModelWithNullableCurrency(models.Model):
